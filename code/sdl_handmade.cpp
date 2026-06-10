@@ -6,7 +6,6 @@
 #include <SDL2/SDL_pixels.h>
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_video.h>
-#include <cstdint>
 #include <sys/mman.h>
 
 #define internal static
