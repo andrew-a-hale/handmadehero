@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_audio.h>
 #include <SDL2/SDL_gamecontroller.h>
 #include <SDL2/SDL_haptic.h>
 #include <SDL2/SDL_joystick.h>
@@ -6,12 +7,17 @@
 #include <SDL2/SDL_pixels.h>
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_video.h>
+#include <stdint.h>
 #include <sys/mman.h>
 
 #define internal static
 #define local_persist static
 #define global_variable static
+
 #define MAX_CONTROLLERS 4
+
+#define PI 3.14159265359f
+#define TAU 2.0f * PI
 
 struct SDLOffscreenBuffer {
   SDL_Texture *Texture;
@@ -22,10 +28,27 @@ struct SDLOffscreenBuffer {
   int BytesPerPixel;
 };
 
+struct SDLSoundOutput {
+  void *AudioBuffer;
+  int SamplesPerSecond;
+  int BytesPerSample;
+  int TargetQueueBytes;
+  int ToneVolume;
+  int LatencySampleCount;
+  float t;
+};
+
+global_variable int FPS = 60;
 global_variable bool GlobalRunning;
 global_variable SDLOffscreenBuffer GlobalBackBuffer;
 global_variable SDL_GameController *ControllerHandles[MAX_CONTROLLERS];
 global_variable SDL_Haptic *RumbleHandles[MAX_CONTROLLERS];
+
+// RENDER
+global_variable int XOffset = 0;
+global_variable int YOffset = 0;
+global_variable int Speed = 10;
+global_variable int ToneHz = 256;
 
 struct SDL_WindowDimension {
   int Width;
@@ -78,7 +101,6 @@ internal void SDLResizeTexture(SDLOffscreenBuffer *Buffer,
 
 internal void SDLUpdateWindow(SDLOffscreenBuffer *Buffer, SDL_Window *Window,
                               SDL_Renderer *Renderer) {
-  SDL_RenderClear(Renderer);
   SDL_UpdateTexture(Buffer->Texture, 0, Buffer->Pixels,
                     Buffer->TextureWidth * Buffer->BytesPerPixel);
   SDL_RenderCopy(Renderer, Buffer->Texture, 0, 0);
@@ -126,16 +148,49 @@ internal bool HandleEvent(SDLOffscreenBuffer *Buffer, SDL_Event *Event) {
   case SDL_KEYDOWN:
   case SDL_KEYUP: {
     SDL_Keycode KeyCode = Event->key.keysym.sym;
+    bool IsDown(Event->key.state == SDL_PRESSED);
     bool WasDown = false;
     if (Event->key.state == SDL_RELEASED) {
       WasDown = true;
     } else if (Event->key.repeat != 0) {
       WasDown = true;
     }
-    switch (KeyCode) {
-    case SDLK_w: {
-      printf("w\n");
-    } break;
+
+    if (Event->key.repeat == 0) {
+      if (KeyCode == SDLK_UP || KeyCode == SDLK_w) {
+        YOffset -= Speed;
+      } else if (KeyCode == SDLK_DOWN || KeyCode == SDLK_s) {
+        YOffset += Speed;
+      } else if (KeyCode == SDLK_LEFT || KeyCode == SDLK_a) {
+        XOffset -= Speed;
+      } else if (KeyCode == SDLK_RIGHT || KeyCode == SDLK_d) {
+        XOffset += Speed;
+      } else if (KeyCode == SDLK_ESCAPE) {
+        printf("ESCAPE: ");
+        if (IsDown) {
+          printf("IsDown");
+        }
+        if (WasDown) {
+          printf("WasDown");
+        }
+        printf("\n");
+      } else if (KeyCode == SDLK_SPACE) {
+        printf("SPACE: ");
+        if (IsDown) {
+          printf("IsDown");
+          ToneHz *= 2;
+        }
+        if (WasDown) {
+          printf("WasDown");
+          ToneHz /= 2;
+        }
+        printf("\n");
+      }
+    }
+
+    bool AltKeyWasDown = (Event->key.keysym.mod & KMOD_ALT);
+    if ((KeyCode == SDLK_F4 || KeyCode == SDLK_q) && AltKeyWasDown) {
+      return true;
     }
   } break;
   }
@@ -181,13 +236,71 @@ void SDLCloseGameControllers() {
   }
 }
 
+internal void SDLInitAudio(int SamplesPerSecond, int BufferSize) {
+  SDL_AudioSpec AudioSettings = {0};
+
+  AudioSettings.freq = SamplesPerSecond;
+  AudioSettings.format = AUDIO_S16LSB;
+  AudioSettings.channels = 2;
+  AudioSettings.samples = BufferSize;
+
+  if (SDL_OpenAudio(&AudioSettings, 0) != 0) {
+    printf("FAILED: SDL_OPENAUDIO");
+  }
+
+  if (AudioSettings.format != AUDIO_S16LSB) {
+    printf("FAILED: AudioSettings format AUDIO_S16LSB not used");
+    SDL_CloseAudio();
+  }
+}
+
+internal void SDLFillAudioBuffer(SDLSoundOutput *SoundOutput, int ToneHz) {
+  int WavePeriod = SoundOutput->SamplesPerSecond / ToneHz;
+  int BytesToWrite = SoundOutput->TargetQueueBytes - SDL_GetQueuedAudioSize(1);
+  int SampleCount = BytesToWrite / SoundOutput->BytesPerSample;
+
+  SoundOutput->AudioBuffer = malloc(BytesToWrite);
+  int16_t *SampleOut = (int16_t *)SoundOutput->AudioBuffer;
+
+  for (int SampleIndex = 0; SampleIndex < SampleCount; ++SampleIndex) {
+    float SineValue = sinf(SoundOutput->t);
+    int16_t SampleValue = (int16_t)(SineValue * SoundOutput->ToneVolume);
+    *SampleOut++ = SampleValue;
+    *SampleOut++ = SampleValue;
+    SoundOutput->t += TAU * 1.0f / (float)WavePeriod;
+    if (SoundOutput->t > TAU) {
+      SoundOutput->t -= TAU;
+    }
+  }
+
+  if (SDL_QueueAudio(1, SoundOutput->AudioBuffer, BytesToWrite) != 0) {
+    printf("FAILED: SDL_QUEUEAUDIO");
+  }
+
+  free(SoundOutput->AudioBuffer);
+}
+
 int main(int argc, char **argv) {
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) !=
-      0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC |
+               SDL_INIT_AUDIO) != 0) {
     printf("FAILED: SDL_INIT: %s", SDL_GetError());
     return 1;
   };
+
   SDLOpenGameControllers();
+
+  SDLSoundOutput SoundOutput = {0};
+  SoundOutput.SamplesPerSecond = 48000;
+  SoundOutput.t = 0;
+  SoundOutput.BytesPerSample = sizeof(int16_t) * 2;
+  SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / 30;
+  SoundOutput.TargetQueueBytes =
+      SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample;
+  SoundOutput.ToneVolume = 3000;
+  SDLInitAudio(SoundOutput.SamplesPerSecond, SoundOutput.LatencySampleCount *
+                                                 SoundOutput.BytesPerSample /
+                                                 FPS);
+  SDL_PauseAudio(0);
 
   SDL_Window *Window =
       SDL_CreateWindow("Handmade Hero", SDL_WINDOWPOS_UNDEFINED,
@@ -205,9 +318,6 @@ int main(int argc, char **argv) {
   }
 
   GlobalRunning = true;
-
-  int XOffset = 0;
-  int YOffset = 0;
   while (GlobalRunning) {
     SDL_Event Event;
     while (SDL_PollEvent(&Event)) {
@@ -254,11 +364,11 @@ int main(int argc, char **argv) {
           SDL_GameControllerGetAxis(handle, SDL_CONTROLLER_AXIS_RIGHTX);
 
       if (leftStickX != 0) {
-        XOffset += leftStickX / 8000;
+        XOffset += leftStickX / 8192;
       }
 
       if (leftStickY != 0) {
-        YOffset += leftStickY / 8000;
+        YOffset += leftStickY / 8192;
       }
 
       if (bButton) {
@@ -268,12 +378,13 @@ int main(int argc, char **argv) {
       }
     }
 
-    // Render
     RenderWeirdGradient(&GlobalBackBuffer, XOffset, YOffset);
+    SDLFillAudioBuffer(&SoundOutput, ToneHz);
     SDLUpdateWindow(&GlobalBackBuffer, Window, Renderer);
   }
 
   SDLCloseGameControllers();
+  SDL_CloseAudio();
   SDL_Quit();
   return 0;
 }

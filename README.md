@@ -1,6 +1,6 @@
 # Handmade Hero
 
-Upto: Day 7
+Upto: Day 10
 
 https://guide.handmadehero.org/
 https://davidgow.net/handmadepenguin/default.html
@@ -19,3 +19,4 @@ https://davidgow.net/handmadepenguin/default.html
 - C
   - Pointer Arithmetic
   - Memory Management (mmap, munmap)
+  - Skipped RingBuffer as it's not required in SDL
