@@ -6,6 +6,7 @@
 #include <SDL2/SDL_keycode.h>
 #include <SDL2/SDL_pixels.h>
 #include <SDL2/SDL_render.h>
+#include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_video.h>
 #include <stdint.h>
 #include <sys/mman.h>
@@ -15,7 +16,6 @@
 #define global_variable static
 
 #define MAX_CONTROLLERS 4
-
 #define PI 3.14159265359f
 #define TAU 2.0f * PI
 
@@ -293,7 +293,8 @@ int main(int argc, char **argv) {
   SoundOutput.SamplesPerSecond = 48000;
   SoundOutput.t = 0;
   SoundOutput.BytesPerSample = sizeof(int16_t) * 2;
-  SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / 30;
+  SoundOutput.LatencySampleCount =
+      SoundOutput.SamplesPerSecond / 15; // 4 frames
   SoundOutput.TargetQueueBytes =
       SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample;
   SoundOutput.ToneVolume = 3000;
@@ -317,6 +318,9 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  uint64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
+  uint64_t LastCounter = SDL_GetPerformanceCounter();
+  uint64_t LastCycleCount = __rdtsc();
   GlobalRunning = true;
   while (GlobalRunning) {
     SDL_Event Event;
@@ -364,11 +368,11 @@ int main(int argc, char **argv) {
           SDL_GameControllerGetAxis(handle, SDL_CONTROLLER_AXIS_RIGHTX);
 
       if (leftStickX != 0) {
-        XOffset += leftStickX / 8192;
+        XOffset += leftStickX / 8000;
       }
 
       if (leftStickY != 0) {
-        YOffset += leftStickY / 8192;
+        YOffset += leftStickY / 8000;
       }
 
       if (bButton) {
@@ -381,6 +385,20 @@ int main(int argc, char **argv) {
     RenderWeirdGradient(&GlobalBackBuffer, XOffset, YOffset);
     SDLFillAudioBuffer(&SoundOutput, ToneHz);
     SDLUpdateWindow(&GlobalBackBuffer, Window, Renderer);
+
+    // Performance
+    uint64_t EndCycleCount = __rdtsc();
+    uint64_t CyclesElapsed = EndCycleCount - LastCycleCount;
+    double MCPF = ((double)CyclesElapsed / (1000.0f * 1000.0f));
+    LastCycleCount = EndCycleCount;
+
+    uint64_t EndCounter = SDL_GetPerformanceCounter();
+    uint64_t CounterElapsed = EndCounter - LastCounter;
+    double MSPerFrame = 1000.0f * CounterElapsed / PerfCountFrequency;
+    double MeasuredFPS = (double)PerfCountFrequency / CounterElapsed;
+    printf("Elapsed:%0.2fms FPS:%0.2f MCPF:%0.2f\n", MSPerFrame, MeasuredFPS,
+           MCPF);
+    LastCounter = EndCounter;
   }
 
   SDLCloseGameControllers();

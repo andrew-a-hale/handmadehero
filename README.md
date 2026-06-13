@@ -1,6 +1,6 @@
 # Handmade Hero
 
-Upto: Day 10
+Upto: Day 11
 
 https://guide.handmadehero.org/
 https://davidgow.net/handmadepenguin/default.html
@@ -20,3 +20,4 @@ https://davidgow.net/handmadepenguin/default.html
   - Pointer Arithmetic
   - Memory Management (mmap, munmap)
   - Skipped RingBuffer as it's not required in SDL
+  - rdtsc / query performance counters
