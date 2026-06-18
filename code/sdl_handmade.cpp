@@ -50,13 +50,13 @@ global_variable int YOffset = 0;
 global_variable int Speed = 10;
 global_variable int ToneHz = 256;
 
-struct SDL_WindowDimension {
+struct SDLWindowDimension {
   int Width;
   int Height;
 };
 
-SDL_WindowDimension SDLGetWindowDimension(SDL_Window *Window) {
-  SDL_WindowDimension Result;
+SDLWindowDimension SDLGetWindowDimension(SDL_Window *Window) {
+  SDLWindowDimension Result;
   SDL_GetWindowSize(Window, &Result.Width, &Result.Height);
   return Result;
 }
@@ -120,7 +120,7 @@ internal bool HandleEvent(SDLOffscreenBuffer *Buffer, SDL_Event *Event) {
     case SDL_WINDOWEVENT_SIZE_CHANGED: {
       SDL_Window *Window = SDL_GetWindowFromID(Event->window.windowID);
       SDL_Renderer *Renderer = SDL_GetRenderer(Window);
-      SDL_WindowDimension WindowDimension = {
+      SDLWindowDimension WindowDimension = {
           .Width = Event->window.data1,
           .Height = Event->window.data2,
       };
@@ -135,7 +135,7 @@ internal bool HandleEvent(SDLOffscreenBuffer *Buffer, SDL_Event *Event) {
     case SDL_WINDOWEVENT_EXPOSED: {
       SDL_Window *Window = SDL_GetWindowFromID(Event->window.windowID);
       SDL_Renderer *Renderer = SDL_GetRenderer(Window);
-      SDL_WindowDimension WindowDimension = SDLGetWindowDimension(Window);
+      SDLWindowDimension WindowDimension = SDLGetWindowDimension(Window);
       SDLResizeTexture(Buffer, Renderer, WindowDimension.Width,
                        WindowDimension.Height);
       SDLUpdateWindow(Buffer, Window, Renderer);
@@ -331,8 +331,6 @@ int main(int argc, char **argv) {
     }
 
     // Input
-    // NOTE: Some input are SDL Events
-    // TODO: poll more often?
     for (int controllerIndex = 0; controllerIndex < MAX_CONTROLLERS;
          ++controllerIndex) {
       SDL_GameController *handle = ControllerHandles[controllerIndex];
@@ -389,15 +387,18 @@ int main(int argc, char **argv) {
     // Performance
     uint64_t EndCycleCount = __rdtsc();
     uint64_t CyclesElapsed = EndCycleCount - LastCycleCount;
-    double MCPF = ((double)CyclesElapsed / (1000.0f * 1000.0f));
-    LastCycleCount = EndCycleCount;
+    float MCPF = ((float)CyclesElapsed / (1000.0f * 1000.0f));
 
     uint64_t EndCounter = SDL_GetPerformanceCounter();
     uint64_t CounterElapsed = EndCounter - LastCounter;
-    double MSPerFrame = 1000.0f * CounterElapsed / PerfCountFrequency;
-    double MeasuredFPS = (double)PerfCountFrequency / CounterElapsed;
+    float MSPerFrame =
+        1000.0f * (float)CounterElapsed / (float)PerfCountFrequency;
+    float MeasuredFPS = (float)PerfCountFrequency / (float)CounterElapsed;
+
     printf("Elapsed:%0.2fms FPS:%0.2f MCPF:%0.2f\n", MSPerFrame, MeasuredFPS,
            MCPF);
+
+    LastCycleCount = EndCycleCount;
     LastCounter = EndCounter;
   }
 

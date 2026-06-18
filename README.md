@@ -18,6 +18,6 @@ https://davidgow.net/handmadepenguin/default.html
 
 - C
   - Pointer Arithmetic
-  - Memory Management (mmap, munmap)
+  - Memory Management (mmap, munmap, malloc, free)
   - Skipped RingBuffer as it's not required in SDL
   - rdtsc / query performance counters
