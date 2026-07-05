@@ -1,3 +1,25 @@
+/*  TODO:
+  - Save game locations
+  - Getting a handle to our own executable file
+  - Asset loading path
+  - Threading (launch a thread)
+  - Raw Input (support for multiple keyboards)
+  - Sleep/timeBeginPeriod
+  - ClipCursor() (for multiple monitor)
+  - Fullscreen Support
+  - Cursor Visibility
+  - QueryCancelAutoplay
+  - ActivateApp
+  - Blit Speed Improvements
+  - Hardware Acceleration
+  - GetKeyboardLayout (intl. wasd)
+*/
+
+#include <stdint.h>
+#include <sys/mman.h>
+
+#include "handmade.cpp"
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_audio.h>
 #include <SDL2/SDL_gamecontroller.h>
@@ -8,8 +30,6 @@
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_video.h>
-#include <stdint.h>
-#include <sys/mman.h>
 
 #define internal static
 #define local_persist static
@@ -44,12 +64,6 @@ global_variable SDLOffscreenBuffer GlobalBackBuffer;
 global_variable SDL_GameController *ControllerHandles[MAX_CONTROLLERS];
 global_variable SDL_Haptic *RumbleHandles[MAX_CONTROLLERS];
 
-// RENDER
-global_variable int XOffset = 0;
-global_variable int YOffset = 0;
-global_variable int Speed = 10;
-global_variable int ToneHz = 256;
-
 struct SDLWindowDimension {
   int Width;
   int Height;
@@ -59,20 +73,6 @@ SDLWindowDimension SDLGetWindowDimension(SDL_Window *Window) {
   SDLWindowDimension Result;
   SDL_GetWindowSize(Window, &Result.Width, &Result.Height);
   return Result;
-}
-
-internal void RenderWeirdGradient(SDLOffscreenBuffer *Buffer, int BlueOffset,
-                                  int GreenOffset) {
-  uint8_t *Row = (uint8_t *)Buffer->Pixels;
-  for (int y = 0; y < Buffer->TextureHeight; ++y) {
-    uint32_t *Pixel = (uint32_t *)Row;
-    for (int x = 0; x < Buffer->TextureWidth; ++x) {
-      uint8_t Blue = x + BlueOffset;
-      uint8_t Green = y + GreenOffset;
-      *Pixel++ = ((Green << 8) | Blue);
-    }
-    Row += Buffer->Pitch;
-  }
 }
 
 internal void SDLResizeTexture(SDLOffscreenBuffer *Buffer,
@@ -158,13 +158,9 @@ internal bool HandleEvent(SDLOffscreenBuffer *Buffer, SDL_Event *Event) {
 
     if (Event->key.repeat == 0) {
       if (KeyCode == SDLK_UP || KeyCode == SDLK_w) {
-        YOffset -= Speed;
       } else if (KeyCode == SDLK_DOWN || KeyCode == SDLK_s) {
-        YOffset += Speed;
       } else if (KeyCode == SDLK_LEFT || KeyCode == SDLK_a) {
-        XOffset -= Speed;
       } else if (KeyCode == SDLK_RIGHT || KeyCode == SDLK_d) {
-        XOffset += Speed;
       } else if (KeyCode == SDLK_ESCAPE) {
         printf("ESCAPE: ");
         if (IsDown) {
@@ -178,11 +174,9 @@ internal bool HandleEvent(SDLOffscreenBuffer *Buffer, SDL_Event *Event) {
         printf("SPACE: ");
         if (IsDown) {
           printf("IsDown");
-          ToneHz *= 2;
         }
         if (WasDown) {
           printf("WasDown");
-          ToneHz /= 2;
         }
         printf("\n");
       }
@@ -294,7 +288,7 @@ int main(int argc, char **argv) {
   SoundOutput.t = 0;
   SoundOutput.BytesPerSample = sizeof(int16_t) * 2;
   SoundOutput.LatencySampleCount =
-      SoundOutput.SamplesPerSecond / 15; // 4 frames
+      SoundOutput.SamplesPerSecond / 15; // every 4 frames
   SoundOutput.TargetQueueBytes =
       SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample;
   SoundOutput.ToneVolume = 3000;
@@ -317,6 +311,10 @@ int main(int argc, char **argv) {
     printf("FAILED: SDL_CREATERENDERER: %s", SDL_GetError());
     return 1;
   }
+
+  int XOffset = 0;
+  int YOffset = 0;
+  int ToneHz = 256;
 
   uint64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
   uint64_t LastCounter = SDL_GetPerformanceCounter();
@@ -380,7 +378,13 @@ int main(int argc, char **argv) {
       }
     }
 
-    RenderWeirdGradient(&GlobalBackBuffer, XOffset, YOffset);
+    OffscreenBuffer Buffer = {};
+    Buffer.Memory = GlobalBackBuffer.Pixels;
+    Buffer.Width = GlobalBackBuffer.TextureWidth;
+    Buffer.Height = GlobalBackBuffer.TextureHeight;
+    Buffer.Pitch = GlobalBackBuffer.Pitch;
+    GameUpdateAndRender(&Buffer, XOffset, YOffset);
+
     SDLFillAudioBuffer(&SoundOutput, ToneHz);
     SDLUpdateWindow(&GlobalBackBuffer, Window, Renderer);
 

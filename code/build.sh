@@ -5,5 +5,5 @@ set -e
 
 pushd ../build
 
-c++ ../code/sdl_handmade.cpp -o handmadehero -g $(sdl2-config --cflags --libs)
+c++ -DHANDMADE_SDL=1 ../code/sdl_handmade.cpp -o handmadehero -g $(sdl2-config --cflags --libs)
 popd
