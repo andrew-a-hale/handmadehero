@@ -287,8 +287,7 @@ int main(int argc, char **argv) {
   SoundOutput.SamplesPerSecond = 48000;
   SoundOutput.t = 0;
   SoundOutput.BytesPerSample = sizeof(int16_t) * 2;
-  SoundOutput.LatencySampleCount =
-      SoundOutput.SamplesPerSecond / 15; // every 4 frames
+  SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
   SoundOutput.TargetQueueBytes =
       SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample;
   SoundOutput.ToneVolume = 3000;
