@@ -1,7 +1,6 @@
 #include "handmade.h"
-#include <stdint.h>
 
-void RenderWeirdGradient(OffscreenBuffer *Buffer, int BlueOffset,
+internal void RenderWeirdGradient(OffscreenBuffer *Buffer, int BlueOffset,
                          int GreenOffset) {
   uint8_t *Row = (uint8_t *)Buffer->Memory;
   for (int y = 0; y < Buffer->Height; ++y) {
@@ -15,6 +14,27 @@ void RenderWeirdGradient(OffscreenBuffer *Buffer, int BlueOffset,
   }
 }
 
-void GameUpdateAndRender(OffscreenBuffer *Buffer, int XOffset, int YOffset) {
+
+internal void OutputGameSound(GameSoundOutputBuffer *SoundOutput, int ToneHz) {
+  local_persist float t;
+  int ToneVolume = 3000;
+  int WavePeriod = SoundOutput->SamplesPerSecond / ToneHz;
+  int16_t *SampleOut = (int16_t *)SoundOutput->Samples;
+
+  for (int SampleIndex = 0; SampleIndex < SoundOutput->SampleCount; ++SampleIndex) {
+    float SineValue = sinf(t);
+    int16_t SampleValue = (int16_t)(SineValue * ToneVolume);
+    *SampleOut++ = SampleValue;
+    *SampleOut++ = SampleValue;
+    t += TAU * 1.0f / (float)WavePeriod;
+    if (t > TAU) {
+      t -= TAU;
+    }
+  }
+}
+
+internal void GameUpdateAndRender(OffscreenBuffer *Buffer, int XOffset, int YOffset, GameSoundOutputBuffer *SoundBuffer, int ToneHz) {
+  // TODO: allow sample offset for more platform options
+  OutputGameSound(SoundBuffer, ToneHz);
   RenderWeirdGradient(Buffer, XOffset, YOffset);
 }

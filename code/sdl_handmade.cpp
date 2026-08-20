@@ -15,10 +15,19 @@
   - GetKeyboardLayout (intl. wasd)
 */
 
+#include <math.h>
 #include <stdint.h>
 #include <sys/mman.h>
 
+#define PI 3.14159265359f
+#define TAU 2.0f * PI
+
+#define internal static
+#define local_persist static
+#define global_variable static
+
 #include "handmade.cpp"
+#include "handmade.h"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_audio.h>
@@ -31,13 +40,7 @@
 #include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_video.h>
 
-#define internal static
-#define local_persist static
-#define global_variable static
-
 #define MAX_CONTROLLERS 4
-#define PI 3.14159265359f
-#define TAU 2.0f * PI
 
 struct SDLOffscreenBuffer {
   SDL_Texture *Texture;
@@ -63,6 +66,7 @@ global_variable bool GlobalRunning;
 global_variable SDLOffscreenBuffer GlobalBackBuffer;
 global_variable SDL_GameController *ControllerHandles[MAX_CONTROLLERS];
 global_variable SDL_Haptic *RumbleHandles[MAX_CONTROLLERS];
+global_variable int ToneHz = 256;
 
 struct SDLWindowDimension {
   int Width;
@@ -174,9 +178,11 @@ internal bool HandleEvent(SDLOffscreenBuffer *Buffer, SDL_Event *Event) {
         printf("SPACE: ");
         if (IsDown) {
           printf("IsDown");
+          ToneHz *= 2;
         }
         if (WasDown) {
           printf("WasDown");
+          ToneHz /= 2;
         }
         printf("\n");
       }
@@ -248,30 +254,12 @@ internal void SDLInitAudio(int SamplesPerSecond, int BufferSize) {
   }
 }
 
-internal void SDLFillAudioBuffer(SDLSoundOutput *SoundOutput, int ToneHz) {
-  int WavePeriod = SoundOutput->SamplesPerSecond / ToneHz;
-  int BytesToWrite = SoundOutput->TargetQueueBytes - SDL_GetQueuedAudioSize(1);
-  int SampleCount = BytesToWrite / SoundOutput->BytesPerSample;
-
-  SoundOutput->AudioBuffer = malloc(BytesToWrite);
-  int16_t *SampleOut = (int16_t *)SoundOutput->AudioBuffer;
-
-  for (int SampleIndex = 0; SampleIndex < SampleCount; ++SampleIndex) {
-    float SineValue = sinf(SoundOutput->t);
-    int16_t SampleValue = (int16_t)(SineValue * SoundOutput->ToneVolume);
-    *SampleOut++ = SampleValue;
-    *SampleOut++ = SampleValue;
-    SoundOutput->t += TAU * 1.0f / (float)WavePeriod;
-    if (SoundOutput->t > TAU) {
-      SoundOutput->t -= TAU;
-    }
-  }
-
-  if (SDL_QueueAudio(1, SoundOutput->AudioBuffer, BytesToWrite) != 0) {
+internal void SDLFillAudioBuffer(SDLSoundOutput *SoundOutput, int BytesToWrite,
+                                 int ToneHz,
+                                 GameSoundOutputBuffer *SoundBuffer) {
+  if (SDL_QueueAudio(1, SoundBuffer->Samples, BytesToWrite) != 0) {
     printf("FAILED: SDL_QUEUEAUDIO");
   }
-
-  free(SoundOutput->AudioBuffer);
 }
 
 int main(int argc, char **argv) {
@@ -285,16 +273,16 @@ int main(int argc, char **argv) {
 
   SDLSoundOutput SoundOutput = {0};
   SoundOutput.SamplesPerSecond = 48000;
-  SoundOutput.t = 0;
   SoundOutput.BytesPerSample = sizeof(int16_t) * 2;
   SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
   SoundOutput.TargetQueueBytes =
       SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample;
-  SoundOutput.ToneVolume = 3000;
   SDLInitAudio(SoundOutput.SamplesPerSecond, SoundOutput.LatencySampleCount *
                                                  SoundOutput.BytesPerSample /
                                                  FPS);
   SDL_PauseAudio(0);
+  int16_t *Samples = (int16_t *)calloc(SoundOutput.LatencySampleCount,
+                                       SoundOutput.BytesPerSample);
 
   SDL_Window *Window =
       SDL_CreateWindow("Handmade Hero", SDL_WINDOWPOS_UNDEFINED,
@@ -313,7 +301,6 @@ int main(int argc, char **argv) {
 
   int XOffset = 0;
   int YOffset = 0;
-  int ToneHz = 256;
 
   uint64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
   uint64_t LastCounter = SDL_GetPerformanceCounter();
@@ -364,10 +351,12 @@ int main(int argc, char **argv) {
 
       if (leftStickX != 0) {
         XOffset += leftStickX / 8000;
+        ToneHz += XOffset * 512;
       }
 
       if (leftStickY != 0) {
         YOffset += leftStickY / 8000;
+        ToneHz += YOffset * 512;
       }
 
       if (bButton) {
@@ -382,9 +371,15 @@ int main(int argc, char **argv) {
     Buffer.Width = GlobalBackBuffer.TextureWidth;
     Buffer.Height = GlobalBackBuffer.TextureHeight;
     Buffer.Pitch = GlobalBackBuffer.Pitch;
-    GameUpdateAndRender(&Buffer, XOffset, YOffset);
 
-    SDLFillAudioBuffer(&SoundOutput, ToneHz);
+    GameSoundOutputBuffer SoundBuffer = {};
+    int BytesToWrite = SoundOutput.TargetQueueBytes - SDL_GetQueuedAudioSize(1);
+    SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
+    SoundBuffer.SampleCount = BytesToWrite / SoundOutput.BytesPerSample;
+    SoundBuffer.Samples = Samples;
+    GameUpdateAndRender(&Buffer, XOffset, YOffset, &SoundBuffer, ToneHz);
+
+    SDLFillAudioBuffer(&SoundOutput, BytesToWrite, ToneHz, &SoundBuffer);
     SDLUpdateWindow(&GlobalBackBuffer, Window, Renderer);
 
     // Performance
