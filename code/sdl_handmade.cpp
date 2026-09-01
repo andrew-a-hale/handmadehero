@@ -15,9 +15,12 @@
   - GetKeyboardLayout (intl. wasd)
 */
 
+#include <cstdint>
+#include <cstdlib>
 #include <math.h>
 #include <stdint.h>
 #include <sys/mman.h>
+#include <sys/types.h>
 
 #define PI 3.14159265359f
 #define TAU 2.0f * PI
@@ -98,7 +101,8 @@ internal void SDLProcessControllerButtonInput(GameButtonState *OldState,
                                               SDL_GameController *handle,
                                               SDL_GameControllerButton Button) {
   NewState->EndedDown = SDL_GameControllerGetButton(handle, Button);
-  NewState->HalfTransitionCount = (OldState->EndedDown != NewState->EndedDown) ? 1 : 0;
+  NewState->HalfTransitionCount =
+      (OldState->EndedDown != NewState->EndedDown) ? 1 : 0;
 }
 
 internal bool HandleEvent(SDLOffscreenBuffer *Buffer, SDL_Event *Event) {
@@ -308,57 +312,52 @@ int main(int argc, char **argv) {
     if (MaxControllerCount > ArrayCount(NewInput->Controllers)) {
       MaxControllerCount = ArrayCount(NewInput->Controllers);
     }
-    for (int controllerIndex = 0; controllerIndex < MaxControllerCount; ++controllerIndex) {
+    for (int controllerIndex = 0; controllerIndex < MaxControllerCount;
+         ++controllerIndex) {
       SDL_GameController *handle = ControllerHandles[controllerIndex];
-      GameControllerInput *OldController = &OldInput->Controllers[controllerIndex];
-      GameControllerInput *NewController = &NewInput->Controllers[controllerIndex];
+      GameControllerInput *OldController =
+          &OldInput->Controllers[controllerIndex];
+      GameControllerInput *NewController =
+          &NewInput->Controllers[controllerIndex];
 
       SDLProcessControllerButtonInput(&(OldController->Up),
-                                      &(NewController->Up),
-                                      handle, SDL_CONTROLLER_BUTTON_DPAD_UP);
+                                      &(NewController->Up), handle,
+                                      SDL_CONTROLLER_BUTTON_DPAD_UP);
       SDLProcessControllerButtonInput(&(OldController->Down),
-                                      &(NewController->Down),
-                                      handle,
+                                      &(NewController->Down), handle,
                                       SDL_CONTROLLER_BUTTON_DPAD_DOWN);
       SDLProcessControllerButtonInput(&(OldController->Left),
-                                      &(NewController->Left),
-                                      handle,
+                                      &(NewController->Left), handle,
                                       SDL_CONTROLLER_BUTTON_DPAD_LEFT);
       SDLProcessControllerButtonInput(&(OldController->Right),
-                                      &(NewController->Right),
-                                      handle,
+                                      &(NewController->Right), handle,
                                       SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-      
+
       SDLProcessControllerButtonInput(&(OldController->LeftShoulder),
-                                      &(NewController->LeftShoulder),
-                                      handle,
+                                      &(NewController->LeftShoulder), handle,
                                       SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
       SDLProcessControllerButtonInput(&(OldController->RightShoulder),
-                                      &(NewController->RightShoulder),
-                                      handle,
+                                      &(NewController->RightShoulder), handle,
                                       SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
       SDLProcessControllerButtonInput(&(OldController->AButton),
-                                      &(NewController->AButton),
-                                      handle,
+                                      &(NewController->AButton), handle,
                                       SDL_CONTROLLER_BUTTON_A);
       SDLProcessControllerButtonInput(&(OldController->XButton),
-                                      &(NewController->XButton),
-                                      handle,
+                                      &(NewController->XButton), handle,
                                       SDL_CONTROLLER_BUTTON_X);
       SDLProcessControllerButtonInput(&(OldController->BButton),
-                                      &(NewController->BButton),
-                                      handle,
+                                      &(NewController->BButton), handle,
                                       SDL_CONTROLLER_BUTTON_B);
       SDLProcessControllerButtonInput(&(OldController->YButton),
-                                      &(NewController->YButton),
-                                      handle,
+                                      &(NewController->YButton), handle,
                                       SDL_CONTROLLER_BUTTON_Y);
 
       NewController->IsAnalog = true;
       NewController->StartX = OldController->EndX;
       NewController->StartY = OldController->EndY;
 
-      int16_t leftStickX = SDL_GameControllerGetAxis(handle, SDL_CONTROLLER_AXIS_LEFTX);
+      int16_t leftStickX =
+          SDL_GameControllerGetAxis(handle, SDL_CONTROLLER_AXIS_LEFTX);
       if (leftStickX < 0) {
         NewController->EndX = leftStickX / -32768.0f;
       } else {
@@ -367,7 +366,8 @@ int main(int argc, char **argv) {
 
       NewController->MinX = NewController->MaxX = OldController->EndX;
 
-      int16_t leftStickY = SDL_GameControllerGetAxis(handle, SDL_CONTROLLER_AXIS_LEFTY);
+      int16_t leftStickY =
+          SDL_GameControllerGetAxis(handle, SDL_CONTROLLER_AXIS_LEFTY);
       if (leftStickY < 0) {
         NewController->EndY = leftStickY / 32768.0f;
       } else {
@@ -378,12 +378,6 @@ int main(int argc, char **argv) {
 
       float rightStick =
           SDL_GameControllerGetAxis(handle, SDL_CONTROLLER_AXIS_RIGHTX);
-
-      // if (bButton) {
-      //   if (RumbleHandles[controllerIndex]) {
-      //     SDL_HapticRumblePlay(RumbleHandles[controllerIndex], 0.5f, 500);
-      //   }
-      // }
     }
 
     OffscreenBuffer Buffer = {};
@@ -397,7 +391,26 @@ int main(int argc, char **argv) {
     SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
     SoundBuffer.SampleCount = BytesToWrite / SoundOutput.BytesPerSample;
     SoundBuffer.Samples = Samples;
-    GameUpdateAndRender(NewInput, &Buffer, &SoundBuffer);
+
+#if HANDMADE_INTERNAL
+    void *BaseAddress = (void *)Terabytes((uint64_t)2);
+#else
+    void *BaseAddress = 0;
+#endif
+    GameMemory Memory = {};
+    Memory.PermanentStorageSize = (uint64_t)Megabytes(64);
+    Memory.TransientStorageSize = (uint64_t)Gigabytes(4);
+
+    uint64_t totalSize =
+        Memory.PermanentStorageSize + Memory.TransientStorageSize;
+    Memory.PermanentStorage =
+        mmap(BaseAddress, totalSize, PROT_READ | PROT_WRITE,
+             MAP_ANON | MAP_PRIVATE, -1, 0);
+
+    Memory.TransientStorage =
+        (uint8_t *)(Memory.PermanentStorage) + Memory.PermanentStorageSize;
+
+    GameUpdateAndRender(&Memory, NewInput, &Buffer, &SoundBuffer);
 
     SDLFillAudioBuffer(&SoundOutput, BytesToWrite, &SoundBuffer);
     SDLUpdateWindow(&GlobalBackBuffer, Window, Renderer);

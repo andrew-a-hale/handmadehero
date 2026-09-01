@@ -33,24 +33,27 @@ internal void OutputGameSound(GameSoundOutputBuffer *SoundOutput, int ToneHz) {
   }
 }
 
-internal void GameUpdateAndRender(GameInput *Input,
+internal void GameUpdateAndRender(GameMemory *Memory, GameInput *Input,
                                   OffscreenBuffer *Buffer,
                                   GameSoundOutputBuffer *SoundBuffer) {
-  // TODO: allow sample offset for more platform options
-  local_persist int GreenOffset = 0;
-  local_persist int BlueOffset = 0;
-  local_persist int ToneHz = 256;
+  Assert(sizeof(GameState) <= Memory->PermanentStorageSize);
+  GameState *State = (GameState *)Memory->PermanentStorage;
+
+  if (!Memory->IsInitialised) {
+    State->ToneHz = 256;
+    Memory->IsInitialised = true;
+  }
 
   GameControllerInput *Input0 = &Input->Controllers[0];
   if (Input0->IsAnalog) {
-    ToneHz += (int)(Input0->EndX * 128.0f);
-    BlueOffset += (int)(Input0->EndY * 4.0f);
+    State->ToneHz += (int)(Input0->EndX * 128.0f);
+    State->BlueOffset += (int)(Input0->EndY * 4.0f);
   } else {
     if (Input0->AButton.EndedDown) {
-      GreenOffset += 1;
+      State->GreenOffset += 1;
     }
   }
 
-  OutputGameSound(SoundBuffer, ToneHz);
-  RenderWeirdGradient(Buffer, GreenOffset, BlueOffset);
+  OutputGameSound(SoundBuffer, State->ToneHz);
+  RenderWeirdGradient(Buffer, State->GreenOffset, State->BlueOffset);
 }

@@ -1,6 +1,6 @@
 # Handmade Hero
 
-Upto: Day 12
+Upto: Day 15
 
 https://guide.handmadehero.org/
 https://davidgow.net/handmadepenguin/default.html
@@ -20,12 +20,12 @@ https://davidgow.net/handmadepenguin/default.html
   - Message Handling
   - Unity Build
   - Cross Platform Support
-    - Option 1: Write a facade for the platform
-    - Option 2: Abstract the game
-    - The game has much less flexiblity then the OS, the other side of the API Boundary, so option 2 is preferred
+    - Abstract the game: The game has much less flexiblity then the OS, the other side of the API Boundary, so option 2 is preferred
 
 - C
   - Pointer Arithmetic
   - Memory Management (mmap, munmap, malloc, free)
   - rdtsc / query performance counters
+  - Include Guard / Idempotent Include
+  - C Union
 

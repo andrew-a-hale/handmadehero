@@ -1,6 +1,19 @@
 #if !defined(HANDMADE_H)
 
+#if HANDMADE_SLOW
+#define Assert(Expression)                                                     \
+  if (!(Expression)) {                                                         \
+    *(int *)0 = 0;                                                             \
+  }
+#else
+#define Assert(Expression)
+#endif
+
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
+#define Kilobytes(Value) ((Value) * 1024LL)
+#define Megabytes(Value) (Kilobytes(Value) * 1024)
+#define Gigabytes(Value) (Megabytes(Value) * 1024)
+#define Terabytes(Value) (Gigabytes(Value) * 1024)
 
 // Services that the platform provides layer to the game
 
@@ -62,7 +75,22 @@ struct GameInput {
   GameControllerInput Controllers[4];
 };
 
-internal void GameUpdateAndRender(GameInput *Input,
+struct GameState {
+  int ToneHz;
+  int GreenOffset;
+  int BlueOffset;
+};
+
+struct GameMemory {
+  bool IsInitialised;
+  uint64_t PermanentStorageSize;
+  void *PermanentStorage;
+
+  uint64_t TransientStorageSize;
+  void *TransientStorage;
+};
+
+internal void GameUpdateAndRender(GameMemory *Memory, GameInput *Input,
                                   OffscreenBuffer *Buffer,
                                   GameSoundOutputBuffer *SoundBuffer);
 
