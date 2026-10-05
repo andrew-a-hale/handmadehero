@@ -17,10 +17,13 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <fcntl.h>
 #include <math.h>
 #include <stdint.h>
 #include <sys/mman.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define PI 3.14159265359f
 #define TAU 2.0f * PI
@@ -52,6 +55,75 @@ global_variable bool GlobalRunning;
 global_variable SDLOffscreenBuffer GlobalBackBuffer;
 global_variable SDL_GameController *ControllerHandles[MAX_CONTROLLERS];
 global_variable SDL_Haptic *RumbleHandles[MAX_CONTROLLERS];
+
+inline uint32_t SafeTruncateUInt64(uint64_t Value) {
+  Assert(Value <= 0xFFFFFFFF);
+  uint32_t Result = (uint32_t)Value;
+  return Result;
+}
+
+internal DEBUGReadFileResult DEBUGPlatformReadEntireFile(char *Filename) {
+  DEBUGReadFileResult Result = {};
+  int FileHandle = open(Filename, O_RDONLY);
+  if (FileHandle == -1) {
+    return Result;
+  }
+
+  struct stat FileStatus;
+  if (fstat(FileHandle, &FileStatus) == -1) {
+    close(FileHandle);
+    return Result;
+  }
+
+  Result.ContentsSize = SafeTruncateUInt64(FileStatus.st_size);
+  Result.Contents = malloc(Result.ContentsSize);
+  if (!Result.Contents) {
+    Result.ContentsSize = 0;
+    close(FileHandle);
+    return Result;
+  }
+
+  uint32_t BytesToRead = Result.ContentsSize;
+  uint8_t *NextByteLocation = (uint8_t*)Result.Contents;
+  while (BytesToRead) {
+    uint32_t BytesRead = read(FileHandle, NextByteLocation, BytesToRead);
+    if (BytesRead == -1) {
+      DEBUGPlatformFreeFileMemory(Result.Contents);
+      Result.Contents = 0;
+      Result.ContentsSize = 0;
+      close(FileHandle);
+      return Result;
+    }
+    BytesToRead -= BytesRead;
+    NextByteLocation += BytesRead;
+  }
+
+  close(FileHandle);
+  return Result;
+}
+
+internal void DEBUGPlatformFreeFileMemory(void *Memory) {
+  free(Memory);
+}
+
+internal bool DEBUGPlatformWriteEntireFile(char *Filename, uint32_t MemorySize, void *Memory) {
+  int FileHandle = open(Filename, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  if (FileHandle == -1) return false;
+  uint32_t BytesToWrite = MemorySize;
+  uint8_t *NextByteLocation = (uint8_t*)Memory;
+  while (BytesToWrite) {
+    uint32_t BytesWritten = write(FileHandle, NextByteLocation, BytesToWrite);
+    if (BytesWritten == -1) {
+      close(FileHandle);
+      return false;
+    }
+    BytesToWrite -= BytesWritten;
+    NextByteLocation += BytesWritten;
+  }
+
+  close(FileHandle);
+  return true;
+}
 
 struct SDLWindowDimension {
   int Width;

@@ -1,6 +1,6 @@
 # Handmade Hero
 
-Upto: Day 15
+Upto: Day 16
 
 https://guide.handmadehero.org/
 https://davidgow.net/handmadepenguin/default.html
@@ -14,6 +14,11 @@ https://davidgow.net/handmadepenguin/default.html
 
 - Sound
   - Skipped RingBuffer as it's not required in SDL
+
+- IO
+  - Don't Overwrite
+  - Don't use variables that haven't been initialised! 
+    - printf changed the stack memory and made it look like the uninitialised variable was okay, but it was reading garbage.
 
 - Platform
   - Input

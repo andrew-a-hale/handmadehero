@@ -1,10 +1,7 @@
 #if !defined(HANDMADE_H)
 
 #if HANDMADE_SLOW
-#define Assert(Expression)                                                     \
-  if (!(Expression)) {                                                         \
-    *(int *)0 = 0;                                                             \
-  }
+#define Assert(Expression) if (!(Expression)) { *(int *)0 = 0; }
 #else
 #define Assert(Expression)
 #endif
@@ -16,6 +13,16 @@
 #define Terabytes(Value) (Gigabytes(Value) * 1024)
 
 // Services that the platform provides layer to the game
+#if HANDMADE_INTERNAL
+struct DEBUGReadFileResult {
+  uint32_t ContentsSize;
+  void *Contents;
+};
+
+internal DEBUGReadFileResult DEBUGPlatformReadEntireFile(char *Filename);
+internal void DEBUGPlatformFreeFileMemory(void *Memory);
+internal bool DEBUGPlatformWriteEntireFile(char *Filename, uint32_t MemorySize, void *Memory);
+#endif
 
 // Services that the game provides to the platform layer
 
@@ -90,7 +97,8 @@ struct GameMemory {
   void *TransientStorage;
 };
 
-internal void GameUpdateAndRender(GameMemory *Memory, GameInput *Input,
+internal void GameUpdateAndRender(GameMemory *Memory,
+                                  GameInput *Input,
                                   OffscreenBuffer *Buffer,
                                   GameSoundOutputBuffer *SoundBuffer);
 

@@ -40,6 +40,14 @@ internal void GameUpdateAndRender(GameMemory *Memory, GameInput *Input,
   GameState *State = (GameState *)Memory->PermanentStorage;
 
   if (!Memory->IsInitialised) {
+    char *Filename = __FILE__;
+
+    DEBUGReadFileResult File = DEBUGPlatformReadEntireFile(Filename);
+    if (File.Contents) {
+      DEBUGPlatformWriteEntireFile("test.out", File.ContentsSize, File.Contents);
+      DEBUGPlatformFreeFileMemory(File.Contents);
+    }
+
     State->ToneHz = 256;
     Memory->IsInitialised = true;
   }
